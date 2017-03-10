@@ -1,80 +1,13 @@
 require 'kafka'
-=begin
-class OrderServiceHandler < KafkaWorker::BaseHandler
-  consumes "warehouse-asset-approved", "warehouse-asset-rejected"
-  def handle(message)
-    ...
-  end
-end
 
-
-#puts (respond_to? :test=)
-#puts (defined? self.text=())
-#puts (respond_to? :nothing_func=)
-singleton_class.send(:define_method, "backend") do |par|
-  puts "Born from the ashes!"
-  puts par
-end
-#define_singleton_method("backend") do
-#  puts "Born from the ashes!"
-#end
-puts self.respond_to?(:nothing_func)
-puts self.respond_to?(:abc)
-puts self.respond_to?(:backend)
-puts self.respond_to?(:test)
-=end
-
-=begin
-  def self.included(base)
-    class << base
-      alias_method :_new, :new
-
-      define_method :new do
-        _new.tap do |instance|
-          instance.send(:after_init)
-        end
-      end
-    end
-  end
-
-  def after_init
-    puts 'after_init'
-  end
-=end
-
-# !self.respond_to?(topic_handler_symbol) &&
+# bin files in gemspec
 
 module KafkaWorker
-#  def tps
-#    @tps ||= []
-#  end
+  class Worker
 
-  def consumes(*topics)
-    errors = []
-    topics.map do |topic|
-      topic_adjusted       = topic.gsub(/-/, "_").downcase
-      topic_handler_symbol = "#{topic_adjusted}_handler".to_sym
-      if !self.method_defined?(topic_handler_symbol)
-        errors << "The class '#{self.name}' consumes the kafka topic '#{topic}'. It requires the method '#{topic_adjusted}_handler(message)'."
-      end
+    def self.handlers
+      @handlers ||= []
     end
-
-    if !errors.empty?
-      Kernel.abort(errors.join("\n"))
-    else
-      # subscribe to topics and call methods
-      # inject topics into BaseHandler
-      define_method("topics") do
-        topics
-      end
-      #self.class.topics = topics
-      #puts self.methods
-    end
-  end
-
-  class BaseHandler
-    extend KafkaWorker
-    attr_reader :kafka_consumer, :logger
 
     def initialize(opts)
       @logger = Logger.new(STDOUT)
@@ -84,12 +17,23 @@ module KafkaWorker
     end
 
     def run
-      topics.map do |topic|
-        kafka_consumer.subscribe(topic, start_from_beginning: false)
+      handlers = self.class.handlers.dup
+
+      handlers.each do |handler|
+        @kafka_consumer.subscribe(handler.topic, start_from_beginning: false)
       end
 
-      kafka_consumer.each_message do |message|
-        
+      @kafka_consumer.each_message do |message|
+        handlers.each do |handler|
+          if message.topic == handler.topic
+            handler_obj = handler.new(@logger)
+            begin
+              handler_obj.handle(message)
+            rescue err
+              handler_obj.on_error(message, err)
+            end
+          end
+        end
       end
     end
 
@@ -98,7 +42,7 @@ module KafkaWorker
       opts = {
         seed_brokers: kafka_ips,
         client_id: client_id,
-        logger: logger,
+        logger: @logger,
       }
       kafka = Kafka.new(opts)
       kafka.consumer(
@@ -109,21 +53,55 @@ module KafkaWorker
         offset_commit_threshold: 1)
     end
   end
+
+  class Handler
+
+    attr_reader :logger
+
+    # https://ruby-doc.org/core-2.2.0/Class.html#method-i-inherited
+    def self.inherited(clazz)
+      Worker.handlers << clazz
+    end
+
+    def self.consumes(topic)
+      @topic = topic
+    end
+
+    def self.topic
+      @topic
+    end
+
+    def initialize(logger)
+      @logger = logger
+    end
+
+    def handle(message)
+      # override me
+    end
+
+    def on_error(message, err)
+      logger.error("#{self.class.name} failed on message: #{message.inspect} with error: #{err}")
+    end
+  end
 end
 
-class Handler < KafkaWorker::BaseHandler
-  def hello_handler(message)
-  end
+class Handler < KafkaWorker::Handler
+  consumes "hello"
 
-  def goodbye_handler(message)
+  def handle(message)
+    puts 'handle hello'
+    puts message.inspect
   end
-
-  def ctb_web_handler(message)
-  end
-
-  consumes "hello", "goodbye", "ctb-web"
 end
 
+class SecondHandler < KafkaWorker::Handler
+  consumes "goodbye"
+
+  def handle(message)
+    puts 'handle goodbye'
+    puts message.inspect
+  end
+end
 
 =begin
 opts = {
@@ -147,7 +125,7 @@ opts = {
 opts = {
    kafka_ips: (ENV['KAFKA_ENDPOINTS'] || "localhost").split(",")
 }
-h = Handler.new(opts)
-h.run
+k = KafkaWorker::Worker.new(opts)
+k.run
 #Handler.test
 #Handler.backend "something else"
