@@ -85,6 +85,7 @@ module KafkaWorker
   end
 end
 
+=begin
 class Handler < KafkaWorker::Handler
   consumes "hello"
 
@@ -103,7 +104,7 @@ class SecondHandler < KafkaWorker::Handler
   end
 end
 
-=begin
+
 opts = {
    client_id: ENV['CREATUBBLES_CLIENT_ID'],
    client_secret: ENV['CREATUBBLES_CLIENT_SECRET'],
@@ -122,10 +123,13 @@ opts = {
    kafka_ips: (ENV['KAFKA_ENDPOINTS'] || "localhost").split(",")
 }
 =end
+
+=begin
 opts = {
    kafka_ips: (ENV['KAFKA_ENDPOINTS'] || "localhost").split(",")
 }
 k = KafkaWorker::Worker.new(opts)
 k.run
+=end
 #Handler.test
 #Handler.backend "something else"
