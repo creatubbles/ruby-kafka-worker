@@ -1,7 +1,5 @@
 require 'kafka'
 
-# bin files in gemspec
-
 module KafkaWorker
   class Worker
 
@@ -13,7 +11,9 @@ module KafkaWorker
       @logger = Logger.new(STDOUT)
 
       kafka_ips = opts.delete(:kafka_ips)
-      @kafka_consumer = init_kafka_consumer(kafka_ips, 'warehouse-kafka-worker', 'warehouse-kafka-worker-consumer')
+      client_id = opts.delete(:client_id)
+      group_id  = opts.delete(:group_id)
+      @kafka_consumer = init_kafka_consumer(kafka_ips, client_id, group_id)
     end
 
     def run
@@ -29,7 +29,7 @@ module KafkaWorker
             handler_obj = handler.new(@logger)
             begin
               handler_obj.handle(message)
-            rescue err
+            rescue Exception => err
               handler_obj.on_error(message, err)
             end
           end
@@ -37,18 +37,25 @@ module KafkaWorker
       end
     end
 
+    def stop_consumer
+      @logger.info("Stopping KafkaWorker::Worker @kafka_consumer")
+      @kafka_consumer.stop
+    rescue Exception => err
+      @logger.debug("Could not KafkaWorker::Worker @kafka_consumer: #{err}")
+    end
+
     private
     def init_kafka_consumer(kafka_ips, client_id, group_id)
       opts = {
         seed_brokers: kafka_ips,
-        client_id: client_id,
-        logger: @logger,
+        client_id:    client_id,
+        logger:       @logger,
       }
       kafka = Kafka.new(opts)
       kafka.consumer(
         group_id: group_id,
         # Increase offset commit frequency to once every 5 seconds.
-        offset_commit_interval: 10,
+        offset_commit_interval:  5,
         # Commit offsets when 1 messages have been processed. Prevent duplication.
         offset_commit_threshold: 1)
     end
@@ -61,6 +68,7 @@ module KafkaWorker
     # https://ruby-doc.org/core-2.2.0/Class.html#method-i-inherited
     def self.inherited(clazz)
       Worker.handlers << clazz
+      puts 'handler has been inherited'
     end
 
     def self.consumes(topic)
@@ -131,5 +139,3 @@ opts = {
 k = KafkaWorker::Worker.new(opts)
 k.run
 =end
-#Handler.test
-#Handler.backend "something else"
