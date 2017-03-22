@@ -1,3 +1,4 @@
+require 'active_support/concern'
 require 'kafka'
 
 module KafkaWorker
@@ -26,7 +27,8 @@ module KafkaWorker
       @kafka_consumer.each_message do |message|
         handlers.each do |handler|
           if message.topic == handler.topic
-            handler_obj = handler.new(@logger)
+            handler_obj = handler.new
+            handler_obj.logger = @logger
             begin
               handler_obj.handle(message)
             rescue Exception => err
@@ -61,26 +63,23 @@ module KafkaWorker
     end
   end
 
-  class Handler
 
-    attr_reader :logger
+  module Handler
+    extend ActiveSupport::Concern
 
-    # https://ruby-doc.org/core-2.2.0/Class.html#method-i-inherited
-    def self.inherited(clazz)
-      Worker.handlers << clazz
-      puts 'handler has been inherited'
+    included do
+      Worker.handlers << self
+      attr_accessor :logger
     end
+    
+    class_methods do
+      def consumes(topic)
+        @topic = topic
+      end
 
-    def self.consumes(topic)
-      @topic = topic
-    end
-
-    def self.topic
-      @topic
-    end
-
-    def initialize(logger)
-      @logger = logger
+      def topic
+        @topic
+      end
     end
 
     def handle(message)
@@ -93,36 +92,63 @@ module KafkaWorker
   end
 end
 
-=begin
-class Handler < KafkaWorker::Handler
+# created only once
+class ClassAbstractCtbHandler
+  cattr_accessor :ctb_client
+end
+
+# created each time useful if you need to mutate
+class AbstractCtbHandler  
+  attr_accessor :ctb_client
+  def initialize
+    @ctb_client = Ctb::Creatubbles.new(
+      client_id: ENV['CREATUBBLES_CLIENT_ID'],
+      client_secret: ENV['CREATUBBLES_CLIENT_SECRET'],
+      api_url: ENV['CREATUBBLES_API_URL'] || Creatubbles::DEFAULT_API_URL 
+    )
+  end
+end
+
+class Handler < AbstractCtbHandler
+  include KafkaWorker::Handler
   consumes "hello"
 
   def handle(message)
     puts 'handle hello'
     puts message.inspect
+    ctb_client
   end
 end
 
-class SecondHandler < KafkaWorker::Handler
+class SecondHandler < ClassAbstractCtbHandler
+  include KafkaWorker::Handler
   consumes "goodbye"
 
   def handle(message)
     puts 'handle goodbye'
     puts message.inspect
+    ctb_client
   end
 end
 
+ClassAbstractCtbHandler.ctb_client = Ctb::Creatubbles.new(
+  client_id: ENV['CREATUBBLES_CLIENT_ID'],
+  client_secret: ENV['CREATUBBLES_CLIENT_SECRET'],
+  api_url: ENV['CREATUBBLES_API_URL'] || Creatubbles::DEFAULT_API_URL 
+)
 
 opts = {
-   client_id: ENV['CREATUBBLES_CLIENT_ID'],
-   client_secret: ENV['CREATUBBLES_CLIENT_SECRET'],
-   api_url: ENV['CREATUBBLES_API_URL'] || Creatubbles::DEFAULT_API_URL,
-   kafka_ips: (ENV['KAFKA_ENDPOINTS'] || "localhost").split(",")
+#   client_id: ENV['CREATUBBLES_CLIENT_ID'],
+#   client_secret: ENV['CREATUBBLES_CLIENT_SECRET'],
+#   api_url: ENV['CREATUBBLES_API_URL'] || Creatubbles::DEFAULT_API_URL,
+   kafka_ips: "127.0.0.1:9092",
+   client_id: 'test',
+   group_id: 'test'
 }
-kw = KafkaWorker::Warehouse.new(opts)
+kw = KafkaWorker::Worker.new(opts)
 kw.run
 trap("QUIT") { kw.stop_consumer }
-=end
+
 =begin
 opts = {
    client_id: ENV['CREATUBBLES_CLIENT_ID'],
