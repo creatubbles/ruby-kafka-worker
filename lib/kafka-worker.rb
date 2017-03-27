@@ -1,3 +1,5 @@
+require 'active_support/concern'
+require 'active_support/notifications'
 require 'kafka'
 
 module KafkaWorker
@@ -9,6 +11,11 @@ module KafkaWorker
 
     def initialize(opts)
       @logger = Logger.new(STDOUT)
+      
+      ActiveSupport::Notifications.subscribe('request.connection.kafka') do |*args|
+        event = ActiveSupport::Notifications::Event.new(*args)
+        @logger.debug("Received notification `#{event.name}` with payload: #{event.payload.inspect}")
+      end
 
       kafka_ips = opts.delete(:kafka_ips)
       client_id = opts.delete(:client_id)
@@ -24,6 +31,7 @@ module KafkaWorker
       end
 
       @kafka_consumer.each_message do |message|
+        @logger.info("kafka_consumer.received message #{message.topic}, value #{message.value}")        
         handlers.each do |handler|
           if message.topic == handler.topic
             handler_obj = handler.new
