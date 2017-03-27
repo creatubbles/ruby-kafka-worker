@@ -1,45 +1,44 @@
-require 'active_support/all'
 require 'kafka-worker'
 
-# this handler is useful if you want to initiate a single value that is the 
-# same for all handler classes that derive this class
-
-# the cattr_accessor iscreated only once, shared by all handlers, any change 
-# to @user will be reflected in all handlers
-class ClassAbstractCtbHandler
-  cattr_accessor :user
-end
-
-class FirstHandler < ClassAbstractCtbHandler
-  include KafkaWorker::Handler
-  consumes "hello"
-
-  def handle(message)
-    puts 'handle hello'
-    puts message.inspect
-    puts user.id
-  end
-end
-
-class SecondHandler < ClassAbstractCtbHandler
-  include KafkaWorker::Handler
-  consumes "goodbye"
-
-  def handle(message)
-    puts 'handle goodbye'
-    puts message.inspect
-    puts user.id
-  end
-end
-
 class User
-  attr_reader :id
+  attr_accessor :id
   def initialize(id)
     @id = id
   end
 end
 
-ClassAbstractCtbHandler.user = User.new(1)
+# created each time useful if you need to mutate
+class AbstractHandler
+  attr_accessor :user
+  def initialize
+    @user = User.new(1)
+  end
+end
+
+class FirstHandler < AbstractHandler
+  include KafkaWorker::Handler
+  consumes "hello"
+
+  def handle(message)
+    puts 'handle hello'
+    puts "previous user.id value is #{user.id}"
+    user.id = message.value
+    puts "new user.id value is #{user.id}"
+  end
+end
+
+class SecondHandler < AbstractHandler
+  include KafkaWorker::Handler
+  consumes "goodbye"
+
+  def handle(message)
+    puts 'handle goodbye'
+    puts "previous user.id value is #{user.id}"
+    user.id = message.value
+    puts "new user.id value is #{user.id}"
+  end
+end
+
 opts = {
    kafka_ips: "127.0.0.1:9092",
    client_id: 'test',
