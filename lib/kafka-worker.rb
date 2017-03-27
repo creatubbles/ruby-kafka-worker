@@ -20,14 +20,16 @@ module KafkaWorker
       kafka_ips = opts.delete(:kafka_ips)
       client_id = opts.delete(:client_id)
       group_id  = opts.delete(:group_id)
-      @kafka_consumer = init_kafka_consumer(kafka_ips, client_id, group_id)
+      offset_commit_interval  = opts.delete(:offset_commit_interval)
+      offset_commit_threshold = opts.delete(:offset_commit_threshold)
+      @kafka_consumer = init_kafka_consumer(kafka_ips, client_id, group_id, offset_commit_interval, offset_commit_threshold)
     end
 
     def run
       handlers = self.class.handlers.dup
 
       handlers.each do |handler|
-        @kafka_consumer.subscribe(handler.topic, start_from_beginning: false)
+        @kafka_consumer.subscribe(handler.topic, start_from_beginning: handler.start_from_beginning)
       end
 
       @kafka_consumer.each_message do |message|
@@ -54,7 +56,7 @@ module KafkaWorker
     end
 
     private
-    def init_kafka_consumer(kafka_ips, client_id, group_id)
+    def init_kafka_consumer(kafka_ips, client_id, group_id, offset_commit_interval, offset_commit_threshold)
       opts = {
         seed_brokers: kafka_ips,
         client_id:    client_id,
@@ -64,9 +66,9 @@ module KafkaWorker
       kafka.consumer(
         group_id: group_id,
         # Increase offset commit frequency to once every 5 seconds.
-        offset_commit_interval:  5,
+        offset_commit_interval:  offset_commit_interval  || 5,
         # Commit offsets when 1 messages have been processed. Prevent duplication.
-        offset_commit_threshold: 1)
+        offset_commit_threshold: offset_commit_threshold || 1)
     end
   end
 
@@ -80,12 +82,17 @@ module KafkaWorker
     end
     
     class_methods do
-      def consumes(topic)
+      def consumes(topic, start_from_beginning = false)
         @topic = topic
+        @start_from_beginning = start_from_beginning
       end
 
       def topic
         @topic
+      end
+      
+      def start_from_beginning
+        @start_from_beginning
       end
     end
 
