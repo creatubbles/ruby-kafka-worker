@@ -92,6 +92,8 @@ module KafkaWorker
   end
 end
 
+
+=begin
 # created only once
 class ClassAbstractCtbHandler
   cattr_accessor :ctb_client
@@ -148,6 +150,8 @@ opts = {
 kw = KafkaWorker::Worker.new(opts)
 kw.run
 trap("QUIT") { kw.stop_consumer }
+=end
+
 
 =begin
 opts = {
