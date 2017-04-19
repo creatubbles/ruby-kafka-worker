@@ -1,0 +1,19 @@
+dependencies:
+  pre:
+    - gem install bundler
+    - gem install rake
+  cache_directories:
+    - "kafka_2.11-0.9.0.1"
+  override:
+    - wget https://s3.amazonaws.com/ctb-ops-ci-deps/kafka_2.11-0.9.0.1.tgz
+    - tar zxvf kafka_2.11-0.9.0.1.tgz
+    - cd kafka_2.11-0.9.0.1 && bin/zookeeper-server-start.sh config/zookeeper.properties:
+         background: true
+    - sleep 15
+    - cd kafka_2.11-0.9.0.1 && bin/kafka-server-start.sh config/server.properties:
+         background: true
+    - sleep 15
+    
+test:
+  override:
+    - bundle install && bundle exec rake spec
