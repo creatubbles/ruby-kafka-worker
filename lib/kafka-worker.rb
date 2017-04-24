@@ -1,6 +1,16 @@
 require 'active_support/concern'
 require 'active_support/notifications'
 require 'kafka'
+require 'rollbar'
+
+Rollbar.configure do |config|
+  if ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(ENV['ENV_DOMAIN_NAME'] || Rails.env)
+    config.access_token = ENV['ROLLBAR_ACCESS_TOKEN']
+    config.enabled      = true
+  else
+    config.enabled      = false
+  end
+end
 
 module KafkaWorker
   class Worker
@@ -38,16 +48,30 @@ module KafkaWorker
           if message.topic == handler.topic
             handler_obj = handler.new
             handler_obj.logger = @logger
+            
+            tries = 5
+            
             begin
               handler_obj.handle(message)
+            
             rescue Exception => err
+              error_message = "#{self.class.name} failed on message: #{message.inspect} with error: #{err}"
+              
+              @logger.error(error_message)
+              Rollbar.error(err, error_message)
+              
               handler_obj.on_error(message, err)
+              
+              if (tries -= 1) > 0
+                sleep(handler.retry_interval)
+                retry
+              end
             end
           end
         end
       end
     end
-
+    
     def stop_consumer
       @logger.info("Stopping KafkaWorker::Worker @kafka_consumer")
       @kafka_consumer.stop
@@ -82,16 +106,24 @@ module KafkaWorker
     end
     
     class_methods do
-      def consumes(topic, start_from_beginning = false)
+      @retry_interval = 60
+      @start_from_beginning = false
+      
+      def consumes(topic)
         @topic = topic
-        @start_from_beginning = start_from_beginning
       end
-
+      
       def topic
         @topic
       end
+
+      def retry_interval(val=nil)
+        @retry_interval = val if val
+        @retry_interval
+      end
       
-      def start_from_beginning
+      def start_from_beginning(val=nil)
+        @start_from_beginning = val if val
         @start_from_beginning
       end
     end
@@ -101,7 +133,7 @@ module KafkaWorker
     end
 
     def on_error(message, err)
-      logger.error("#{self.class.name} failed on message: #{message.inspect} with error: #{err}")
+      # override me
     end
   end
 end
