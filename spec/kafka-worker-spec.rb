@@ -5,6 +5,7 @@ require 'rspec'
 class HelloHandler
   include KafkaWorker::Handler
   consumes "hello"
+  retry_interval 0
   @@message_value = nil
   def handle(message)
     puts "HelloHandler received the following message: #{message.value}"
@@ -16,12 +17,14 @@ class HelloHandler
   end
 end
 
+
 class CustomError < StandardError
 end
 
 class ForceErrorHandler
   include KafkaWorker::Handler
   consumes "error"
+  retry_interval 0
   
   @@error_value = nil
   def handle(message)
@@ -32,6 +35,28 @@ class ForceErrorHandler
   def on_error(message, err)
     puts err
     @@error_value = err
+  end
+  
+  def self.error_value
+    @@error_value
+  end  
+end
+
+class ForceErrorAndRetryHandler
+  include KafkaWorker::Handler
+  consumes "retry"
+  retry_interval 0
+  
+  @@error_value = 0
+  def handle(message)
+    puts "ForceErrorAndRetryHandler is going to raise CustomError"
+    raise CustomError, 'default error message'
+  end
+   
+  def on_error(message, err)
+    @@error_value += 1
+    puts 'updated error_value'
+    puts @@error_value
   end
   
   def self.error_value
@@ -65,7 +90,7 @@ describe KafkaWorker do
       @kw.run
     end
     # circle ci is slow, need to wait for connection before starting
-    sleep 30
+    sleep 10
   end
   
   after(:all) do
@@ -76,14 +101,21 @@ describe KafkaWorker do
   it "consume events and pushes a value into a class object" do
     message_value = 'Hello World!'
     @kafka_producer.produce(message_value, topic:'hello')
-    sleep 30
+    sleep 10
     expect(HelloHandler.message_value).to eq message_value
   end
-
+  
   it "catch an exception if there is in the handler code" do
     message_value = 'An error is coming.'
     @kafka_producer.produce(message_value, topic:'error')
-    sleep 30
+    sleep 10
     expect(ForceErrorHandler.error_value.to_s).to eq 'default error message'
   end  
+
+  it "retry if there is an exception" do
+    message_value = 'An error is coming.'
+    @kafka_producer.produce(message_value, topic:'retry')    
+    sleep 10
+    expect(Integer(ForceErrorAndRetryHandler.error_value.to_s)).to be > 1
+  end
 end

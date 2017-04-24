@@ -11,6 +11,7 @@ Gem::Specification.new do |s|
   s.files        = ['lib/kafka-worker.rb']
   s.homepage     = 'https://github.com/creatubbles/ruby-kafka-worker'
 
-  s.add_dependency('ruby-kafka')
   s.add_dependency('activesupport')
+  s.add_dependency('rollbar')
+  s.add_dependency('ruby-kafka')
 end
