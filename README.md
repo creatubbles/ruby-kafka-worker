@@ -11,22 +11,22 @@ gem 'kafka-worker', github: 'creatubbles/ruby-kafka-worker'
 ```
 
 For each kafka topic you want to respond to, create a class that includes `KafkaWorker::Handler`
-, `consumes('name-of-topic')` and a custom definition of the `handler(message)` method.
+, `consumes('name-of-topic')` and a custom definition of the `handle(message)` method.
 
 ```ruby
 class HelloWorldTopicHandler
-  includes KafkaWorker::Handler
+  include KafkaWorker::Handler
   consumes 'hello-world'
-  
-  def handler(message)
+
+  def handle(message)
     print message
   end
 end
 ```
 
-Now `KafkaWorker::Worker` will call `HelloWorldTopicHandler::handler` every time 
-it receives a message for the topic `hello-world`. You can define multiple 
-handlers across separate files and they will all be automatically registered 
+Now `KafkaWorker::Worker` will call `HelloWorldTopicHandler::handler` every time
+it receives a message for the topic `hello-world`. You can define multiple
+handlers across separate files and they will all be automatically registered
 in `KafkaWorker::Handler`. Next you need to intialize the `KafkaWorker::Worker`
 and run it to consume kafka topics.
 
@@ -42,8 +42,8 @@ kw.run
 trap("QUIT") { kw.stop_consumer }
 ```
 
-If you want to initialize and share values between handlers, you need to declare 
-a class that the handler will subclass, and then initialize the variables before 
+If you want to initialize and share values between handlers, you need to declare
+a class that the handler will subclass, and then initialize the variables before
 running the kafka worker.
 
 ```ruby
@@ -52,19 +52,19 @@ class BaseKafkaHandler
 end
 
 class ChildTopicHandler < BaseKafkaHandler
-  includes KafkaWorker::Handler
+  include KafkaWorker::Handler
   consumes 'hello-world'
-  
-  def handler(message)
+
+  def handle(message)
     print x
   end
 end
 
 class SecondChildTopicHandler < BaseKafkaHandler
-  includes KafkaWorker::Handler
+  include KafkaWorker::Handler
   consumes 'goodbye'
-  
-  def handler(message)
+
+  def handle(message)
     print x
   end
 end
@@ -84,7 +84,7 @@ trap("QUIT") { kw.stop_consumer }
 
 ## Rollbar support
 
-This gem will automatically log errors to Rollbar if these conditions are met. 
+This gem will automatically log errors to Rollbar if these conditions are met.
 
 ```ruby
 ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(ENV['ENV_DOMAIN_NAME'] || Rails.env)
