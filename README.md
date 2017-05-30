@@ -91,3 +91,30 @@ ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(ENV['ENV_DOMAI
 ```
 
 You can also override `on_error(message, err)` in each handler.
+
+## How to test topic handlers
+Handler:
+```ruby
+class HelloWorldTopicHandler
+  include KafkaWorker::Handler
+  consumes 'hello-world'
+
+  def handle(message)
+    print JSON.parse(message.value)['say']
+  end
+end
+```
+
+Test:
+```ruby
+require 'test/kafka_message'
+describe HelloWorldTopicHandler do
+  it 'prints say message' do
+    expect do
+      HelloWorldTopicHandler.new.handle(Test::KafkaMessage.new('hello-world', {
+        say: 'Hello!'
+      }))
+    end.to output('Hello!').to_stdout
+  end
+end
+```
