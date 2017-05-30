@@ -21,7 +21,7 @@ module KafkaWorker
 
     def initialize(opts)
       @logger = Logger.new(STDOUT)
-      
+
       ActiveSupport::Notifications.subscribe('request.connection.kafka') do |*args|
         event = ActiveSupport::Notifications::Event.new(*args)
         @logger.debug("Received notification `#{event.name}` with payload: #{event.payload.inspect}")
@@ -43,25 +43,25 @@ module KafkaWorker
       end
 
       @kafka_consumer.each_message do |message|
-        @logger.info("kafka_consumer.received message #{message.topic}, value #{message.value}")        
+        @logger.info("kafka_consumer.received message #{message.topic}, value #{message.value}")
         handlers.each do |handler|
           if message.topic == handler.topic
             handler_obj = handler.new
             handler_obj.logger = @logger
-            
+
             tries = 5
-            
+
             begin
               handler_obj.handle(message)
-            
+
             rescue Exception => err
               error_message = "#{self.class.name} failed on message: #{message.inspect} with error: #{err}"
-              
+
               @logger.error(error_message)
               Rollbar.error(err, error_message)
-              
+
               handler_obj.on_error(message, err)
-              
+
               if (tries -= 1) > 0
                 sleep(handler.retry_interval)
                 retry
@@ -71,7 +71,7 @@ module KafkaWorker
         end
       end
     end
-    
+
     def stop_consumer
       @logger.info("Stopping KafkaWorker::Worker @kafka_consumer")
       @kafka_consumer.stop
@@ -104,15 +104,15 @@ module KafkaWorker
       Worker.handlers << self
       attr_accessor :logger
     end
-    
+
     class_methods do
       @retry_interval = 60
       @start_from_beginning = false
-      
+
       def consumes(topic)
         @topic = topic
       end
-      
+
       def topic
         @topic
       end
@@ -121,7 +121,7 @@ module KafkaWorker
         @retry_interval = val if val
         @retry_interval
       end
-      
+
       def start_from_beginning(val=nil)
         @start_from_beginning = val if val
         @start_from_beginning
@@ -129,6 +129,11 @@ module KafkaWorker
     end
 
     def handle(message)
+      # override me
+      perform(JSON.parse(message.value).with_indifferent_access)
+    end
+
+    def perform(hash)
       # override me
     end
 
