@@ -1,5 +1,6 @@
 require 'active_support/concern'
 require 'active_support/notifications'
+require 'active_support/core_ext/hash'
 require 'kafka'
 require 'rollbar'
 
