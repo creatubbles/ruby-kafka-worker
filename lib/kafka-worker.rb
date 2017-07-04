@@ -11,20 +11,14 @@ module KafkaWorker
     end
 
     def initialize(opts)
-      @logger = Logger.new(STDOUT)
-      @logger.level = Logger::INFO
+      @logger = opts[:logger] || Logger.new(STDOUT).tap{|l| l.level = Logger::INFO }
 
       ActiveSupport::Notifications.subscribe('request.connection.kafka') do |*args|
         event = ActiveSupport::Notifications::Event.new(*args)
         @logger.debug("Received notification `#{event.name}` with payload: #{event.payload.inspect}")
       end
 
-      kafka_ips = opts.delete(:kafka_ips)
-      client_id = opts.delete(:client_id)
-      group_id  = opts.delete(:group_id)
-      offset_commit_interval  = opts.delete(:offset_commit_interval)
-      offset_commit_threshold = opts.delete(:offset_commit_threshold)
-      @kafka_consumer = init_kafka_consumer(kafka_ips, client_id, group_id, offset_commit_interval, offset_commit_threshold)
+      @kafka_consumer = init_kafka_consumer(opts)
     end
 
     def run
@@ -73,19 +67,14 @@ module KafkaWorker
 
     private
 
-    def init_kafka_consumer(kafka_ips, client_id, group_id, offset_commit_interval, offset_commit_threshold)
-      opts = {
-        seed_brokers: kafka_ips,
-        client_id:    client_id,
-        logger:       @logger,
-      }
-      kafka = Kafka.new(opts)
+    def init_kafka_consumer(opts)
+      kafka = Kafka.new(seed_brokers: opts[:kafka_ips], client_id: opts[:client_id], logger: @logger)
       kafka.consumer(
-        group_id: group_id,
+        group_id: opts[:group_id],
         # Increase offset commit frequency to once every 5 seconds.
-        offset_commit_interval:  offset_commit_interval  || 5,
+        offset_commit_interval: opts[:offset_commit_interval] || 5,
         # Commit offsets when 1 messages have been processed. Prevent duplication.
-        offset_commit_threshold: offset_commit_threshold || 1)
+        offset_commit_threshold: opts[:offset_commit_threshold] || 1)
     end
 
     def capture_exception(err, error_message)
