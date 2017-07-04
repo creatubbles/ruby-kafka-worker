@@ -12,6 +12,7 @@ module KafkaWorker
 
     def initialize(opts)
       @logger = Logger.new(STDOUT)
+      @logger.level = Logger::INFO
 
       ActiveSupport::Notifications.subscribe('request.connection.kafka') do |*args|
         event = ActiveSupport::Notifications::Event.new(*args)
@@ -67,7 +68,7 @@ module KafkaWorker
       @logger.info("Stopping KafkaWorker::Worker @kafka_consumer")
       @kafka_consumer.stop
     rescue Exception => err
-      @logger.debug("Could not KafkaWorker::Worker @kafka_consumer: #{err}")
+      @logger.warn("Could not stop KafkaWorker::Worker @kafka_consumer: #{err}")
     end
 
     private

@@ -83,11 +83,13 @@ end
 
 describe KafkaWorker do
   before (:all) do
+    logger = Logger.new(STDOUT)
+    logger.level = Logger::INFO
     # make a producer to push events to the KafkaWorker
     @kafka = Kafka.new(
       seed_brokers: '127.0.0.1:9092',
       client_id: 'kafka-worker-spec',
-      logger: Logger.new(STDOUT)
+      logger: logger
     )
 
     @kafka_producer = @kafka.async_producer(
