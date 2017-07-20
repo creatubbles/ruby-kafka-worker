@@ -4,6 +4,11 @@ require 'active_support/core_ext/hash'
 require 'kafka'
 
 module KafkaWorker
+
+  def self.error_reporting_env
+    @error_reporting_env ||= ENV['RACK'] || ENV['ENV_DOMAIN_NAME'] || ENV['RACK_ENV'] || ENV['RAILS_ENV'] || 'development'
+  end
+
   class Worker
 
     def self.handlers
@@ -128,15 +133,13 @@ module KafkaWorker
   end
 end
 
-env = ENV['RACK'] || ENV['ENV_DOMAIN_NAME'] || ENV['RACK_ENV'] || ENV['RAILS_ENV'] || 'development'
 
 if defined?(Raven)
   Raven.configure do |config|
-    config.current_environment = env
+    config.release = ENV['RELEASE'] if ENV['RELEASE'].present?
+    config.sanitize_fields = Rails.application.config.filter_parameters.map(&:to_s)
+    config.current_environment = KafkaWorker.error_reporting_env
   end
-  config.release = ENV['RELEASE'] if ENV['RELEASE'].present?
-  config.sanitize_fields = Rails.application.config.filter_parameters.map(&:to_s)
-  config.current_environment = env
 
   module KafkaWorker
     class Worker
@@ -147,7 +150,7 @@ if defined?(Raven)
   end
 elsif defined?(Rollbar)
   Rollbar.configure do |config|
-    if ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(env)
+    if ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(KafkaWorker.error_reporting_env)
       config.access_token = ENV['ROLLBAR_ACCESS_TOKEN']
       config.enabled      = true
     else
