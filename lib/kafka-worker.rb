@@ -132,7 +132,7 @@ env = ENV['RACK'] || ENV['ENV_DOMAIN_NAME'] || ENV['RACK_ENV'] || ENV['RAILS_ENV
 
 if defined?(Raven)
   Raven.configure do |config|
-    config.current_environment = ENV['RACK'] || ENV['RAILS_ENV'] || 'development'
+    config.current_environment = env
   end
   config.release = ENV['RELEASE'] if ENV['RELEASE'].present?
   config.sanitize_fields = Rails.application.config.filter_parameters.map(&:to_s)
