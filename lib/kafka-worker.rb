@@ -96,8 +96,6 @@ module KafkaWorker
     end
 
     class_methods do
-      @retry_interval = 60
-      @start_from_beginning = false
 
       def consumes(topic)
         @topic = topic
@@ -109,11 +107,13 @@ module KafkaWorker
 
       def retry_interval(val=nil)
         @retry_interval = val if val
+        @retry_interval ||= 60
         @retry_interval
       end
 
       def start_from_beginning(val=nil)
         @start_from_beginning = val if val
+        @start_from_beginning ||= false
         @start_from_beginning
       end
     end
