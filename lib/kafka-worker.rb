@@ -133,6 +133,13 @@ module KafkaWorker
   end
 end
 
+if ENV['SENTRY_DSN']
+  require 'raven' rescue nil
+end
+
+if ENV['ROLLBAR_ACCESS_TOKEN']
+  require 'rollbar' rescue nil
+end
 
 if defined?(Raven)
   Raven.configure do |config|
