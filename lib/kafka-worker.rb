@@ -144,7 +144,8 @@ if defined?(Raven)
   Raven.configure do |config|
     config.release = ENV['RELEASE'] if ENV['RELEASE'].present?
     if defined?(Rails)
-      config.sanitize_fields = Rails&.application&.config&.filter_parameters&.map(&:to_s)
+      filter_params = Rails&.application&.config&.filter_parameters
+      config.sanitize_fields = filter_params.map(&:to_s) if filter_params
     end
     config.current_environment = KafkaWorker.error_reporting_env
   end
