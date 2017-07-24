@@ -44,11 +44,10 @@ module KafkaWorker
 
             begin
               handler_obj.handle(message)
-
-            rescue Exception => err
-              error_message = "#{self.class.name} failed on message: #{message.inspect} with error: #{err}"
-
+            rescue e => err
+              error_message = "#{self.class.name} failed on message: #{message.value.inspect} with error: #{err.message}"
               @logger.error(error_message)
+              @logger.error(err&.backtrace&.join("\n"))
               capture_exception(err, error_message)
 
               handler_obj.on_error(message, err)
