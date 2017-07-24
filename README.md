@@ -99,12 +99,20 @@ kw.run
 trap("QUIT") { kw.stop_consumer }
 ```
 
+## Sentry support
+
+This gem will automatically log errors to Sentry if these conditions are met.
+
+```ruby
+ENV['SENTRY_DSN'] # exist
+```
+
 ## Rollbar support
 
 This gem will automatically log errors to Rollbar if these conditions are met.
 
 ```ruby
-ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(ENV['ENV_DOMAIN_NAME'] || Rails.env)
+ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(env)
 ```
 
 You can also override `on_error(message, err)` in each handler.

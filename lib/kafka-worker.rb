@@ -4,6 +4,11 @@ require 'active_support/core_ext/hash'
 require 'kafka'
 
 module KafkaWorker
+
+  def self.error_reporting_env
+    @error_reporting_env ||= ENV['RACK'] || ENV['ENV_DOMAIN_NAME'] || ENV['RACK_ENV'] || ENV['RAILS_ENV'] || 'development'
+  end
+
   class Worker
 
     def self.handlers
@@ -91,8 +96,6 @@ module KafkaWorker
     end
 
     class_methods do
-      @retry_interval = 60
-      @start_from_beginning = false
 
       def consumes(topic)
         @topic = topic
@@ -104,11 +107,13 @@ module KafkaWorker
 
       def retry_interval(val=nil)
         @retry_interval = val if val
+        @retry_interval ||= 60
         @retry_interval
       end
 
       def start_from_beginning(val=nil)
         @start_from_beginning = val if val
+        @start_from_beginning ||= false
         @start_from_beginning
       end
     end
@@ -128,9 +133,33 @@ module KafkaWorker
   end
 end
 
-if defined?(Rollbar)
+if ENV['SENTRY_DSN']
+  require 'raven' rescue nil
+end
+
+if ENV['ROLLBAR_ACCESS_TOKEN']
+  require 'rollbar' rescue nil
+end
+
+if defined?(Raven)
+  Raven.configure do |config|
+    config.release = ENV['RELEASE'] if ENV['RELEASE'].present?
+    if defined?(Rails)
+      config.sanitize_fields = Rails&.application&.config&.filter_parameters&.map(&:to_s)
+    end
+    config.current_environment = KafkaWorker.error_reporting_env
+  end
+
+  module KafkaWorker
+    class Worker
+      def capture_exception(err, error_message)
+        Raven.capture_exception(err, extra: {'message' => error_message})
+      end
+    end
+  end
+elsif defined?(Rollbar)
   Rollbar.configure do |config|
-    if ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(ENV['ENV_DOMAIN_NAME'] || Rails.env)
+    if ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(KafkaWorker.error_reporting_env)
       config.access_token = ENV['ROLLBAR_ACCESS_TOKEN']
       config.enabled      = true
     else
@@ -142,18 +171,6 @@ if defined?(Rollbar)
     class Worker
       def capture_exception(err, error_message)
         Rollbar.error(err, error_message)
-      end
-    end
-  end
-elsif defined?(Raven)
-  Raven.configure do |config|
-    config.current_environment = ENV['RACK'] || ENV['RAILS_ENV'] || 'development'
-  end
-
-  module KafkaWorker
-    class Worker
-      def capture_exception(err, error_message)
-        Raven.capture_exception(err, extra: {'message' => error_message})
       end
     end
   end
