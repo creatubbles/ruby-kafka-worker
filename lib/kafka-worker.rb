@@ -133,11 +133,17 @@ module KafkaWorker
 end
 
 if ENV['SENTRY_DSN']
-  require 'raven' rescue nil
+  begin
+    require 'raven'
+  rescue LoadError
+  end
 end
 
 if ENV['ROLLBAR_ACCESS_TOKEN']
-  require 'rollbar' rescue nil
+  begin
+    require 'rollbar'
+  rescue LoadError
+  end
 end
 
 if defined?(Raven)
