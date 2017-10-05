@@ -1,13 +1,12 @@
 # frozen_string_literal: true
 
-require 'kafka'
 require 'kafka_worker'
 require 'rspec'
 require 'json'
 
 Dir[File.join(File.dirname(__FILE__), 'handlers/*.rb')].each { |f| require f }
 
-describe KafkaWorker do
+describe KafkaWorker::Worker do
   before(:all) do
     # setup kafka producer
     kafka = Kafka.new(
@@ -19,7 +18,7 @@ describe KafkaWorker do
     @kafka_worker = KafkaWorker::Worker.new(
       kafka_ips: ['127.0.0.1:9092'], client_id: 'test', group_id:  'test', offset_commit_interval: 1
     )
-    expect(::KafkaWorker.handlers.count).to eq(3)
+    expect(::KafkaWorker.handlers.count).to eq(4)
     Thread.new { @kafka_worker.run }
 
     sleep 10

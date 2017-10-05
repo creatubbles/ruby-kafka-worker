@@ -7,26 +7,23 @@ module KafkaWorker
     included do
       ::KafkaWorker.handlers << self
       attr_accessor :logger
+      @retry_interval = 60
+      @start_from_beginning = false
     end
 
     class_methods do
-      @retry_interval = 60
-      @start_from_beginning = false
+      attr_reader :topic
 
       def consumes(topic)
         @topic = topic
       end
 
-      def topic
-        @topic
-      end
-
-      def retry_interval(val=nil)
+      def retry_interval(val = nil)
         @retry_interval = val if val
         @retry_interval
       end
 
-      def start_from_beginning(val=nil)
+      def start_from_beginning(val = nil)
         @start_from_beginning = val if val
         @start_from_beginning
       end
