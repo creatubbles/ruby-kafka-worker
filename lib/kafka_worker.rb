@@ -34,6 +34,20 @@ ActiveSupport::Notifications.subscribe('kafka_worker.processing_error') do |*dat
   KafkaWorker.logger.error(event.payload[:error_message])
 end
 
+ActiveSupport::Notifications.subscribe('kafka_worker.giving_up_processing') do |*data|
+  event = ActiveSupport::Notifications::Event.new(*data)
+  message = event.payload[:message]
+  KafkaWorker.logger.info("Failed on message #{message.topic}/#{message.offset} 5 times, giving up")
+end
+
+ActiveSupport::Notifications.subscribe("kafka_worker.publish_to_error_topic_failed") do |*data|
+  event = ActiveSupport::Notifications::Event.new(*data)
+  message = event.payload[:message]
+  topic = event.payload[:topic]
+  err = event.payload[:error]
+  KafkaWorker.logger.error("Could not publish #{message} to topic #{topic}: #{err}")
+end
+
 if defined?(Raven)
   Raven.configure do |config|
     config.current_environment = ENV['RACK'] || ENV['RAILS_ENV'] || 'development'
@@ -44,5 +58,13 @@ if defined?(Raven)
     err = event.payload[:error]
     error_message = event.payload[:error_message]
     Raven.capture_exception(err, extra: { 'message' => error_message })
+  end
+
+  ActiveSupport::Notifications.subscribe("kafka_worker.publish_to_error_topic_failed") do |*data|
+    event = ActiveSupport::Notifications::Event.new(*data)
+    message = event.payload[:message]
+    topic = event.payload[:topic]
+    err = event.payload[:error]
+    Raven.capture_exception(err, extra: { 'message' => message, 'topic' => topic })
   end
 end

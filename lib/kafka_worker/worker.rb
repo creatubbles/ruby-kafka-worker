@@ -39,15 +39,17 @@ module KafkaWorker
         begin
           handler_obj.handle(message)
         rescue => err
-          error_message = "Failed on message #{message.topic}, value #{message.value.inspect} with error: #{err}"
-          ActiveSupport::Notifications.instrument("kafka_worker.processing_error", message: message, error: err, error_message: error_message) do
+          error_message = "Failed on message #{message.topic}/#{message.offset}, value #{message.value.inspect} with error: #{err}"
+          ActiveSupport::Notifications.instrument("kafka_worker.processing_error", message: message, handler: handler.to_s, error: err, error_message: error_message) do
             handler_obj.on_error(message, err)
           end
           if (tries -= 1).positive?
             sleep(handler.retry_interval)
             retry
           else
-            publish_to_error_topic(message, handler, err.to_s)
+            ActiveSupport::Notifications.instrument("kafka_worker.giving_up_processing", message: message, handler: handler.to_s, error: err.to_s) do
+              publish_to_error_topic(message, handler, err.to_s)
+            end
           end
         end
       end
@@ -73,8 +75,13 @@ module KafkaWorker
           offset: orig_message.offset,
           value: orig_message.value
         }
-      }
-      @kafka.deliver_message(message.to_json, topic: "#{orig_message.topic}-failed").inspect
+      }.to_json
+      topic = "#{orig_message.topic}-failed"
+      begin
+        @kafka.deliver_message(message, topic: topic)
+      rescue => err
+        ActiveSupport::Notifications.instrument("kafka_worker.publish_to_error_topic_failed", message: message, topic: topic, error: err)
+      end
     end
   end
 end
