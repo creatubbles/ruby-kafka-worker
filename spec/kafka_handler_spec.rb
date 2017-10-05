@@ -7,7 +7,7 @@ Dir[File.join(File.dirname(__FILE__), 'handlers/*.rb')].each { |f| require f }
 
 describe KafkaWorker::Handler do
   it "has default retry_interval" do
-    expect(SimpleHandler.retry_interval).to eq(60)
+    expect(SimpleHandler.retry_interval).to eq(5)
     expect(HelloHandler.retry_interval).to eq(0)
   end
 

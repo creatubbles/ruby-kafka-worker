@@ -7,7 +7,7 @@ module KafkaWorker
     included do
       ::KafkaWorker.handlers << self
       attr_accessor :logger
-      @retry_interval = 60
+      @retry_interval = 5
       @start_from_beginning = false
     end
 
