@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'kafka'
-require 'kafka-worker'
+require 'kafka_worker'
 require 'rspec'
 require 'json'
 
