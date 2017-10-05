@@ -5,7 +5,7 @@ module KafkaWorker
     extend ActiveSupport::Concern
 
     included do
-      Worker.handlers << self
+      ::KafkaWorker.handlers << self
       attr_accessor :logger
     end
 

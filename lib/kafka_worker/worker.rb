@@ -2,68 +2,59 @@
 
 module KafkaWorker
   class Worker
-    def self.handlers
-      @handlers ||= []
-    end
 
     def initialize(opts)
-      @logger = opts[:logger] || Logger.new(STDOUT).tap { |l| l.level = Logger::INFO }
-
-      ActiveSupport::Notifications.subscribe('request.connection.kafka') do |*args|
-        event = ActiveSupport::Notifications::Event.new(*args)
-        @logger.debug("Received notification `#{event.name}` with payload: #{event.payload.inspect}")
-      end
-
       @kafka_consumer = init_kafka_consumer(opts)
+      @handlers = ::KafkaWorker.handlers.dup
     end
 
     def run
-      handlers = self.class.handlers.dup
-
-      handlers.each do |handler|
+      @handlers.each do |handler|
         @kafka_consumer.subscribe(handler.topic, start_from_beginning: handler.start_from_beginning)
       end
 
       @kafka_consumer.each_message do |message|
-        @logger.info("kafka_consumer.received message #{message.topic}, value #{message.value}")
-        handlers.each do |handler|
-          next unless message.topic == handler.topic
+        ActiveSupport::Notifications.instrument("kafka_worker.process_message", message: message) do
+          process_message(message)
+        end
+      end
+    end
 
-          handler_obj = handler.new
-          handler_obj.logger = @logger
+    def process_message(message)
+      @handlers.each do |handler|
+        next unless message.topic == handler.topic
 
-          tries = 5
+        handler_obj = handler.new
+        handler_obj.logger = KafkaWorker.logger
 
-          begin
-            handler_obj.handle(message)
-          rescue => err
-            error_message = "#{self.class.name} failed on message: #{message.inspect} with error: #{err}"
+        tries = 5
 
-            @logger.error(error_message)
-            capture_exception(err, error_message)
-
+        begin
+          handler_obj.handle(message)
+        rescue => err
+          error_message = "Failed on message #{message.topic}, value #{message.value.inspect} with error: #{err}"
+          ActiveSupport::Notifications.instrument("kafka_worker.processing_error", message: message, error: err, error_message: error_message) do
             handler_obj.on_error(message, err)
-
-            if (tries -= 1).positive?
-              sleep(handler.retry_interval)
-              retry
-            end
+          end
+          if (tries -= 1).positive?
+            sleep(handler.retry_interval)
+            retry
           end
         end
       end
     end
 
     def stop_consumer
-      @logger.info("Stopping KafkaWorker::Worker @kafka_consumer")
+      KafkaWorker.logger.info("Stopping KafkaWorker::Worker @kafka_consumer")
       @kafka_consumer.stop
     rescue => err
-      @logger.warn("Could not stop KafkaWorker::Worker @kafka_consumer: #{err}")
+      KafkaWorker.logger.warn("Could not stop KafkaWorker::Worker @kafka_consumer: #{err}")
     end
 
     private
 
     def init_kafka_consumer(opts)
-      kafka = Kafka.new(seed_brokers: opts[:kafka_ips], client_id: opts[:client_id], logger: @logger)
+      kafka = Kafka.new(seed_brokers: opts[:kafka_ips], client_id: opts[:client_id], logger: KafkaWorker.logger)
       kafka.consumer(
         group_id: opts[:group_id],
         # Increase offset commit frequency to once every 5 seconds.
@@ -71,9 +62,6 @@ module KafkaWorker
         # Commit offsets when 1 messages have been processed. Prevent duplication.
         offset_commit_threshold: opts[:offset_commit_threshold] || 1
       )
-    end
-
-    def capture_exception(err, error_message)
     end
   end
 end

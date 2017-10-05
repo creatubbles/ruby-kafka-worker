@@ -10,9 +10,8 @@ Dir[File.join(File.dirname(__FILE__), 'handlers/*.rb')].each { |f| require f }
 describe KafkaWorker do
   before(:all) do
     # setup kafka producer
-    logger = Logger.new(STDOUT).tap { |l| l.level = Logger::INFO }
     kafka = Kafka.new(
-      seed_brokers: '127.0.0.1:9092', client_id: 'kafka-worker-spec', logger: logger
+      seed_brokers: '127.0.0.1:9092', client_id: 'kafka-worker-spec', logger: KafkaWorker.logger
     )
     @kafka_producer = kafka.async_producer(delivery_interval: 1)
 
@@ -20,6 +19,7 @@ describe KafkaWorker do
     @kafka_worker = KafkaWorker::Worker.new(
       kafka_ips: ['127.0.0.1:9092'], client_id: 'test', group_id:  'test', offset_commit_interval: 1
     )
+    expect(::KafkaWorker.handlers.count).to eq(3)
     Thread.new { @kafka_worker.run }
 
     sleep 10
@@ -31,7 +31,7 @@ describe KafkaWorker do
   end
 
   before(:each) do
-    KafkaWorker::Worker.handlers.each { |h| h.processed_messages_count = 0 }
+    KafkaWorker.handlers.each { |h| h.processed_messages_count = 0 }
   end
 
   it "consume events and pushes a value into a class object" do
