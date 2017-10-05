@@ -4,7 +4,14 @@ module KafkaWorker
   class Worker
 
     def initialize(opts)
-      @kafka_consumer = init_kafka_consumer(opts)
+      @kafka = Kafka.new(seed_brokers: opts[:kafka_ips], client_id: opts[:client_id], logger: KafkaWorker.logger)
+      @kafka_consumer = @kafka.consumer(
+        group_id: opts[:group_id],
+        # Increase offset commit frequency to once every 5 seconds.
+        offset_commit_interval: opts[:offset_commit_interval] || 5,
+        # Commit offsets when 1 messages have been processed. Prevent duplication.
+        offset_commit_threshold: opts[:offset_commit_threshold] || 1
+      )
       @handlers = ::KafkaWorker.handlers.dup
     end
 
@@ -39,6 +46,8 @@ module KafkaWorker
           if (tries -= 1).positive?
             sleep(handler.retry_interval)
             retry
+          else
+            publish_to_error_topic(message, handler, err.to_s)
           end
         end
       end
@@ -53,15 +62,19 @@ module KafkaWorker
 
     private
 
-    def init_kafka_consumer(opts)
-      kafka = Kafka.new(seed_brokers: opts[:kafka_ips], client_id: opts[:client_id], logger: KafkaWorker.logger)
-      kafka.consumer(
-        group_id: opts[:group_id],
-        # Increase offset commit frequency to once every 5 seconds.
-        offset_commit_interval: opts[:offset_commit_interval] || 5,
-        # Commit offsets when 1 messages have been processed. Prevent duplication.
-        offset_commit_threshold: opts[:offset_commit_threshold] || 1
-      )
+    def publish_to_error_topic(orig_message, handler, error)
+      message = {
+        failed_at: Time.now,
+        error: error,
+        handler: handler.to_s,
+        message: {
+          key: orig_message.key,
+          topic: orig_message.topic,
+          offset: orig_message.offset,
+          value: orig_message.value
+        }
+      }
+      @kafka.deliver_message(message.to_json, topic: "#{orig_message.topic}-failed").inspect
     end
   end
 end

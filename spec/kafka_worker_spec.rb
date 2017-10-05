@@ -48,6 +48,15 @@ describe KafkaWorker do
     sleep 10
     expect(ForceErrorHandler.error_value.to_s).to eq 'default error message'
     expect(ForceErrorHandler.processed_messages_count).to eq(5)
+    sleep 10
+    client = Kafka.new(seed_brokers: '127.0.0.1:9092', client_id: 'test-error-checker')
+    messages = client.fetch_messages(topic: 'error-failed', partition: 0, offset: :earliest)
+    expect(messages).not_to be_empty
+    latest_msg = JSON.parse(messages.last.value)
+    expect(latest_msg).to include("failed_at",
+      "error" => "default error message",
+      "handler" => "ForceErrorHandler",
+      "message" => include("topic" => "error", "value" => "An error is coming."))
   end
 
   it "consume events and pushes a value into a class object" do
