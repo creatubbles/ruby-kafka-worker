@@ -16,4 +16,5 @@ dependencies:
     
 test:
   override:
-    - bundle install && bundle exec rake spec
+    - bundle install
+    - bundle exec rspec spec
