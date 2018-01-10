@@ -68,7 +68,17 @@ describe KafkaWorker::Worker do
     expect(HelloHandler.message_value).to eq message_value
   end
 
-  it "handles exceptions when pushing data into failed topic" do
+  it "handles Kafka::LeaderNotAvailable when pushing data into failed topic" do
+    allow(@kafka_worker.instance_variable_get(:@kafka)).to receive(:deliver_message).and_raise(Kafka::LeaderNotAvailable)
+    message_value = 'An error is coming.'
+    @kafka_producer.produce(message_value, topic: 'error')
+    sleep 10
+    expect(ForceErrorHandler.error_value.to_s).to eq 'default error message'
+    expect(ForceErrorHandler.processed_messages_count).to eq(5)
+    expect(publish_to_error_topic_failed.first).to eq("kafka_worker.publish_to_error_topic_failed")
+  end
+
+  it "handles generic exceptions when pushing data into failed topic" do
     expect(@kafka_worker.instance_variable_get(:@kafka)).to receive(:deliver_message).and_raise("error")
     message_value = 'An error is coming.'
     @kafka_producer.produce(message_value, topic: 'error')

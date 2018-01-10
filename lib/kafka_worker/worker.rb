@@ -66,6 +66,7 @@ module KafkaWorker
     private
 
     def publish_to_error_topic(orig_message, handler, error)
+      error_topic_deliver_tries = 0
       message = {
         failed_at: Time.now,
         error: error,
@@ -80,6 +81,15 @@ module KafkaWorker
       topic = "#{orig_message.topic}-failed"
       begin
         @kafka.deliver_message(message, topic: topic)
+      rescue Kafka::LeaderNotAvailable => err
+        if error_topic_deliver_tries >= 4
+          ActiveSupport::Notifications.instrument("kafka_worker.publish_to_error_topic_failed", message: message, topic: topic, error: err)
+        else
+          KafkaWorker.logger.info("publising to #{topic} failed (#{err}), retying")
+          error_topic_deliver_tries += 1
+          sleep 1
+          retry
+        end
       rescue => err
         ActiveSupport::Notifications.instrument("kafka_worker.publish_to_error_topic_failed", message: message, topic: topic, error: err)
       end
