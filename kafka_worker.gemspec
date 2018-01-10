@@ -12,5 +12,5 @@ Gem::Specification.new do |s|
   s.homepage     = 'https://github.com/creatubbles/ruby-kafka-worker'
 
   s.add_dependency('activesupport')
-  s.add_dependency('ruby-kafka')
+  s.add_dependency('ruby-kafka', '0.5.2')
 end
