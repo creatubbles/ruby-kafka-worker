@@ -2,11 +2,10 @@
 
 module KafkaWorker
   class Worker
-
-    def initialize(opts)
-      @kafka = Kafka.new(seed_brokers: opts[:kafka_ips], client_id: opts[:client_id], logger: KafkaWorker.logger)
+    def initialize(seed_brokers, client_id, group_id, opts={})
+      @kafka = Kafka.new(seed_brokers: seed_brokers, client_id: client_id, logger: KafkaWorker.kafka_logger)
       @kafka_consumer = @kafka.consumer(
-        group_id: opts[:group_id],
+        group_id: group_id,
         # Increase offset commit frequency to once every 5 seconds.
         offset_commit_interval: opts[:offset_commit_interval] || 5,
         # Commit offsets when 1 messages have been processed. Prevent duplication.
@@ -16,6 +15,8 @@ module KafkaWorker
     end
 
     def run
+      ActiveSupport::Notifications.instrument("kafka_worker.before_run")
+
       @handlers.each do |handler|
         @kafka_consumer.subscribe(handler.topic, start_from_beginning: handler.start_from_beginning)
       end

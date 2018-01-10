@@ -1,8 +1,18 @@
 # kafka-worker
 
-Generalizes kafka intialization and event consumption. Now you just need to register Handler classes for each consumed event.
+Generalizes Kafka initalization and event consumption. Now you just need to register Handler classes for each consumed event, which can be as simple as:
 
-## How to use kafka-worker
+```ruby
+class MessageLoggingHandler
+  include KafkaWorker::Handler
+  consumes 'topic'
+  def handle(message)
+    puts message.value
+  end
+end
+```
+
+## Installing kafka-worker
 
 Add the following line to your Gemfile
 
@@ -10,58 +20,63 @@ Add the following line to your Gemfile
 gem 'kafka-worker', github: 'creatubbles/ruby-kafka-worker'
 ```
 
-For each kafka topic you want to respond to, create a class that includes `KafkaWorker::Handler`
-, `consumes('name-of-topic')` and a custom definition of the `handle(message)` method.
+### Rails
 
+For Rails you can then run the install generator:
+
+```
+rails generate kafka_worker:install
+```
+
+### Other (non-Rails projects)
+
+Alternatively if you're not using Rails as base for your project, create a directory `app/kafka_handlers` for the handlers (see below) and create a script like the one below to start the worker:
+
+```ruby
+#!/usr/bin/env ruby
+require_relative '../config/environment' # load your environment, including the Kafka handlers
+require 'kafka_worker/runner'            # load the runner script
+KafkaWorker::Runner.run
+```
+
+## Writing handlers
+
+For each Kafka topic you want to respond to, create a class that includes `KafkaWorker::Handler`, `consumes('name-of-topic')` and a custom definition of the `handle(message)` method.
+
+For instance:
 ```ruby
 class HelloWorldTopicHandler
   include KafkaWorker::Handler
   consumes 'hello-world'
 
   def handle(message)
-    print message
+    # handle message.value
   end
 end
 ```
 
-Now `KafkaWorker::Worker` will call `HelloWorldTopicHandler::handler` every time
-it receives a message for the topic `hello-world`. You can define multiple
-handlers across separate files and they will all be automatically registered
-in `KafkaWorker::Handler`.
+Now `HelloWorldTopicHandler#handle` will be called every time we receive a message for the topic `hello-world`.
 
-By default `KafkaWorker::Handler::handler` assumes `message.value` is a JSON
-string, parses it and calls `KafkaWorker::Handler::perform` with hash (being the
-result of JSON parsing). Thus it's usually enough to override `perform(hash)` in
-your handler:
+If you're passing along JSON encoded messages, we can also overwrite `perform` instead of `handle`. The default implementation of `handle` parses the JSON message into a hash and passes it to `perform`. Thus it's usually enough to override `perform(hash)` in your handler:
+
 ```ruby
 class HelloWorldTopicHandler
   include KafkaWorker::Handler
   consumes 'hello-world'
 
   def perform(hash)
-    print hash
+    # handle JSON message parsed into hash
   end
 end
 ```
 
-Next you need to intialize the `KafkaWorker::Worker`
-and run it to consume kafka topics.
+You can define multiple handlers across separate files and they will all be automatically registered in `KafkaWorker::Handler` and called for the topics they consume.
 
-```ruby
-opts = {
-   kafka_ips: "127.0.0.1:9092",
-   client_id: 'test',
-   group_id: 'test'
-}
+### Advanced handlers
 
-kw = KafkaWorker::Worker.new(opts)
-kw.run
-trap("QUIT") { kw.stop_consumer }
-```
+If you want to initialize and share values between handlers, you need to declare a class that the handler will subclass, and then initialize the variables in an initializer script.
 
-If you want to initialize and share values between handlers, you need to declare
-a class that the handler will subclass, and then initialize the variables before
-running the kafka worker.
+For example, if you have the following handlers:
 
 ```ruby
 class BaseKafkaHandler
@@ -85,40 +100,30 @@ class SecondChildTopicHandler < BaseKafkaHandler
     print x
   end
 end
-
-BaseKafkaHandler.x = "this is shared"
-
-opts = {
-   kafka_ips: "127.0.0.1:9092",
-   client_id: 'test',
-   group_id: 'test'
-}
-
-kw = KafkaWorker::Worker.new(opts)
-kw.run
-trap("QUIT") { kw.stop_consumer }
 ```
 
-## Sentry support
-
-This gem will automatically log errors to Sentry if these conditions are met.
+Then you can put the following code into `config/initializers/kafka_worker.rb` (Rails) or some similar file you're requiring from your custom start script to run before the worker starts:
 
 ```ruby
-ENV['SENTRY_DSN'] # exist
+ActiveSupport::Notifications.subscribe('kafka_worker.before_run') do
+  BaseKafkaHandler.x = "this is shared"
+end
 ```
 
-## Rollbar support
+### Handling errors
 
-This gem will automatically log errors to Rollbar if these conditions are met.
+You can override `on_error(message, err)` in each handler to handle errors on the handler.
 
-```ruby
-ENV['ROLLBAR_ACCESS_TOKEN'] && ['staging', 'production'].include?(env)
-```
+If you'd like a more generic approach, you can also subscribe to the error event. See `lib/kafka_worker.rb` for details.
 
-You can also override `on_error(message, err)` in each handler.
+#### Sentry support
+
+This gem will automatically log errors to Sentry if you have the `sentry-raven` gem installed and loaded and `SENTRY_DSN` is in your environment or you somehow else initialize the gem.
 
 ## How to test topic handlers
+
 ### Handler overriding `handle` method
+
 Handler:
 ```ruby
 class HelloWorldTopicHandler
@@ -146,6 +151,7 @@ end
 ```
 
 ### Handler overriding `perform` method
+
 Handler:
 ```ruby
 class HelloWorldTopicHandler

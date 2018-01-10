@@ -1,0 +1,9 @@
+Description:
+    Install KafkaWorker into your project
+
+Example:
+    rails generate kafka_worker:install
+
+    This will create:
+        app/kafka_handlers
+        bin/kafka_worker

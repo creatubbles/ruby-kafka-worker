@@ -14,15 +14,11 @@ end
 describe KafkaWorker::Worker do
   before(:all) do
     # setup kafka producer
-    kafka = Kafka.new(
-      seed_brokers: '127.0.0.1:9092', client_id: 'kafka-worker-spec', logger: KafkaWorker.logger
-    )
+    kafka = Kafka.new(seed_brokers: '127.0.0.1:9092', client_id: 'kafka-worker-spec', logger: KafkaWorker.logger)
     @kafka_producer = kafka.async_producer(delivery_interval: 1)
 
     # setup kafka worker
-    @kafka_worker = KafkaWorker::Worker.new(
-      kafka_ips: ['127.0.0.1:9092'], client_id: 'test', group_id:  'test', offset_commit_interval: 1
-    )
+    @kafka_worker = KafkaWorker::Worker.new('127.0.0.1:9092', 'test', 'test', offset_commit_interval: 1)
     expect(::KafkaWorker.handlers.count).to eq(4)
     KafkaWorker.handlers.each { |h| h.processed_messages_count = 0 }
     Thread.new { @kafka_worker.run }
@@ -40,7 +36,7 @@ describe KafkaWorker::Worker do
     KafkaWorker.handlers.each { |h| h.processed_messages_count = 0 }
   end
 
-  it "consume events and pushes a value into a class object" do
+  it "consumes events and pushes a value into a class object" do
     message_value = 'Hello World!'
     @kafka_producer.produce(message_value, topic: 'hello')
     sleep 10
@@ -48,7 +44,7 @@ describe KafkaWorker::Worker do
     expect(HelloHandler.message_value).to eq message_value
   end
 
-  it "catch an exception if there is in the handler code" do
+  it "catches an exception if there is in the handler code" do
     message_value = 'An error is coming.'
     @kafka_producer.produce(message_value, topic: 'error')
     sleep 10
@@ -82,7 +78,7 @@ describe KafkaWorker::Worker do
     expect(publish_to_error_topic_failed.first).to eq("kafka_worker.publish_to_error_topic_failed")
   end
 
-  it "consume events and pushes a value into a class object" do
+  it "consumes events and pushes a value into a class object" do
     message_value = { say: 'Hello World!' }
     @kafka_producer.produce(message_value.to_json, topic: 'perform-hello')
     sleep 10

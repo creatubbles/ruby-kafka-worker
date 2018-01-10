@@ -8,13 +8,36 @@ require 'kafka_worker/worker'
 require 'kafka_worker/handler'
 
 module KafkaWorker
+  def self.environment
+    ENV['RACK_ENV'] || ENV['RAILS_ENV'] || 'development'
+  end
+
+  def self.production_env?
+    environment == 'production'
+  end
+
   def self.handlers
     @handlers ||= []
   end
 
+  mattr_writer :logging_level
+  def self.logging_level
+    @logging_level ||= Logger::INFO
+  end
+
   mattr_writer :logger
   def self.logger
-    @logger ||= Logger.new(STDOUT).tap { |l| l.level = Logger::INFO }
+    @logger ||= Logger.new(STDOUT).tap { |l| l.level = logging_level }
+  end
+
+  mattr_writer :kafka_logging_level
+  def self.kafka_logging_level
+    @kafka_logging_level ||= production_env? ? Logger::WARN : Logger::INFO
+  end
+
+  mattr_writer :kafka_logger
+  def self.kafka_logger
+    @kafka_logger ||= Logger.new(STDOUT).tap { |l| l.level = kafka_logging_level }
   end
 end
 
