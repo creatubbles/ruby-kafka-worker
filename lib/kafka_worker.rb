@@ -3,6 +3,7 @@
 require 'active_support/concern'
 require 'active_support/notifications'
 require 'active_support/core_ext/hash'
+require 'active_support/logger'
 require 'kafka'
 require 'kafka_worker/worker'
 require 'kafka_worker/handler'
@@ -22,22 +23,29 @@ module KafkaWorker
 
   mattr_writer :logging_level
   def self.logging_level
-    @logging_level ||= Logger::INFO
+    @logging_level ||= :info
   end
 
   mattr_writer :logger
   def self.logger
-    @logger ||= Logger.new(STDOUT).tap { |l| l.level = logging_level }
+    @logger ||= create_logger(logging_level)
   end
 
   mattr_writer :kafka_logging_level
   def self.kafka_logging_level
-    @kafka_logging_level ||= production_env? ? Logger::WARN : Logger::INFO
+    @kafka_logging_level ||= production_env? ? :warn : logging_level
   end
 
   mattr_writer :kafka_logger
   def self.kafka_logger
-    @kafka_logger ||= Logger.new(STDOUT).tap { |l| l.level = kafka_logging_level }
+    @kafka_logger ||= create_logger(kafka_logging_level)
+  end
+
+  def self.create_logger(level)
+    ActiveSupport::Logger.new(STDOUT).tap do |logger|
+      logger.formatter = ::Logger::Formatter.new
+      logger.level = level
+    end
   end
 end
 

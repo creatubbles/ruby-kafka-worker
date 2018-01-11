@@ -6,6 +6,7 @@ module KafkaWorker
   module Runner
     class << self
       def run
+        STDOUT.sync = true # for logging
         logger.info("running in #{environment} environment") unless production_env?
         unless kafka_endpoints.present?
           logger.error("environment variable KAFKA_ENDPOINTS not set")
