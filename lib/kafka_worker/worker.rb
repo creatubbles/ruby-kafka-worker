@@ -12,6 +12,7 @@ module KafkaWorker
         offset_commit_threshold: opts[:offset_commit_threshold] || 1
       )
       @handlers = ::KafkaWorker.handlers.dup
+      @executor = Class.new(ActiveSupport::Executor)
     end
 
     def run
@@ -32,20 +33,21 @@ module KafkaWorker
       @handlers.each do |handler|
         next unless message.topic == handler.topic
 
-        handler_obj = handler.new
-        handler_obj.logger = KafkaWorker.logger
-
         tries = 5
-
         begin
+          state = @executor.run!
+          handler_obj = handler.new
+          handler_obj.logger = KafkaWorker.logger
           handler_obj.handle(message)
+          state.complete!
         rescue => err
           error_message = "Failed on message #{message.topic}/#{message.offset}, value #{message.value.inspect} with error: #{err}"
           ActiveSupport::Notifications.instrument("kafka_worker.processing_error", message: message, handler: handler.to_s, error: err, error_message: error_message) do
             handler_obj.on_error(message, err)
           end
+          state.complete!
           if (tries -= 1).positive?
-            sleep(handler.retry_interval)
+            sleep handler.retry_interval
             retry
           else
             ActiveSupport::Notifications.instrument("kafka_worker.giving_up_processing", message: message, handler: handler.to_s, error: err.to_s) do
